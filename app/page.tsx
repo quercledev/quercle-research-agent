@@ -1,65 +1,130 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import { useResearchAgent } from "@/lib/hooks/useResearchAgent";
+import { ResearchInput } from "@/components/ResearchInput";
+import { ResearchView } from "@/components/ResearchView";
+import { HistorySidebar } from "@/components/HistorySidebar";
+import { Logo } from "@/components/Logo";
+import { Github, History } from "lucide-react";
 
 export default function Home() {
+  const {
+    state,
+    startResearch,
+    cancelResearch,
+    resetResearch,
+    loadResearch,
+    isRunning,
+    currentResearchId,
+  } = useResearchAgent();
+
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  const isActive = state.phase !== "idle" || state.steps.length > 0;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="min-h-screen bg-mesh relative overflow-hidden">
+      {/* Floating orbs */}
+      <div className="orb orb-1 -top-40 -left-40" />
+      <div className="orb orb-2 top-1/3 -right-20" />
+      <div className="orb orb-3 -bottom-20 left-1/4" />
+
+      {/* Content */}
+      <div className="relative z-10 min-h-screen flex flex-col">
+        {/* Header */}
+        <header className="p-6 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setIsHistoryOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-muted hover:text-foreground hover:bg-white/5 rounded-lg transition-all"
+              title="Research History"
+            >
+              <History className="w-4 h-4" />
+              <span className="hidden sm:inline">History</span>
+            </button>
+            <Logo />
+          </div>
+          <a
+            href="https://github.com/quercle/quercle-research-agent"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-sm text-muted hover:text-foreground transition-colors"
+          >
+            <Github className="w-4 h-4" />
+            <span className="hidden sm:inline">View on GitHub</span>
+          </a>
+        </header>
+
+        {/* History Sidebar */}
+        <HistorySidebar
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+          onSelect={(id) => {
+            loadResearch(id);
+            setIsHistoryOpen(false);
+          }}
+          currentResearchId={currentResearchId}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        {/* Main content */}
+        <main className="flex-1 flex flex-col">
+          {!isActive ? (
+            // Centered input when idle
+            <div className="flex-1 flex flex-col items-center justify-center px-4 pb-20">
+              <div className="text-center mb-8 animate-fade-in-up">
+                <h1 className="text-4xl sm:text-5xl font-bold mb-4">
+                  <span className="gradient-text">Deep Research</span>
+                  <br />
+                  <span className="text-foreground/80">with AI Agents</span>
+                </h1>
+                <p className="text-muted text-lg max-w-lg mx-auto">
+                  Ask any complex question. Our AI agent will search, analyze, and synthesize information from across the web.
+                </p>
+              </div>
+              <div className="w-full max-w-2xl animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                <ResearchInput
+                  onSubmit={startResearch}
+                  isLoading={isRunning}
+                  onCancel={cancelResearch}
+                />
+              </div>
+            </div>
+          ) : (
+            // Split view when active
+            <ResearchView
+              state={state}
+              isRunning={isRunning}
+              onCancel={cancelResearch}
+              onReset={resetResearch}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+          )}
+        </main>
+
+        {/* Footer */}
+        <footer className="p-4 text-center text-sm text-muted">
+          <p>
+            Powered by{" "}
+            <a
+              href="https://quercle.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:text-primary-hover transition-colors"
+            >
+              Quercle API
+            </a>
+            {" "}+{" "}
+            <a
+              href="https://mongodb.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:text-primary-hover transition-colors"
+            >
+              MongoDB
+            </a>
+          </p>
+        </footer>
+      </div>
     </div>
   );
 }
