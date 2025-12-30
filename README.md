@@ -79,7 +79,7 @@ Next month: "Update me on AI agents - what's new since my last research?"
 ### Setup
 
 ```bash
-git clone https://github.com/quercle/quercle-research-agent.git
+git clone https://github.com/quercledev/quercle-research-agent.git
 cd quercle-research-agent
 bun install
 cp .env.example .env

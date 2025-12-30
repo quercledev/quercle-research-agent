@@ -46,7 +46,7 @@ export default function Home() {
             <Logo />
           </div>
           <a
-            href="https://github.com/quercle/quercle-research-agent"
+            href="https://github.com/quercledev/quercle-research-agent"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-sm text-muted hover:text-foreground transition-colors"
