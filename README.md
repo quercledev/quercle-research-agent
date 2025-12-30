@@ -1,316 +1,222 @@
 # Quercle Research Agent
 
-[![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://mongodb.com)
-[![Quercle](https://img.shields.io/badge/Quercle-2563EB?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDNhOSA5IDAgMSAwIDkgOSIvPjxwYXRoIGQ9Ik0xMiAzdjkiLz48cGF0aCBkPSJNMTIgMTJsNi42LTYuNiIvPjwvc3ZnPg==&logoColor=white)](https://quercle.dev)
-[![Next.js](https://img.shields.io/badge/Next.js_16-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org)
-[![Bun](https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white)](https://bun.sh)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+An AI research assistant that **remembers what it learns**. Built for individuals who research the same topics repeatedly and want to build knowledge over time, not start from scratch each session.
 
-An AI-powered research agent with **persistent memory**. Uses [Quercle](https://quercle.dev) for real-time web intelligence and [MongoDB](https://mongodb.com) for long-term memory storage.
+## The Problem
 
-```
-You: Research the current state of AI agent frameworks
+You're researching AI agent frameworks. You spend 30 minutes with ChatGPT, get great results, close the tab. Next week you need to continue that research - but the AI has forgotten everything. You start over.
 
-Agent: [web_search] "AI agent frameworks 2025"
-       [read_page] Analyzing langchain documentation...
-       [remember] Storing 5 key findings...
-
-       Here's what I found: ...
-
-You (next week): What did you find about LangChain?
-
-Agent: [recall] Retrieving memories about "LangChain"...
-
-       From my previous research, LangChain is...
-```
-
-## Architecture
+This agent doesn't forget.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      AI Agent                               │
-│              (Claude, GPT-4, or other LLMs)                 │
-│                   via Vercel AI SDK                         │
-└──────────┬──────────────┬──────────────┬────────────────────┘
-           │              │              │
-     ┌─────▼─────┐  ┌─────▼─────┐  ┌─────▼─────┐
-     │web_search │  │ read_page │  │  memory   │
-     └─────┬─────┘  └─────┬─────┘  └─────┬─────┘
-           │              │              │
-     ┌─────▼──────────────▼─────┐  ┌─────▼─────┐
-     │        Quercle API       │  │  MongoDB  │
-     │  Real-time web intel     │  │  Atlas    │
-     └──────────────────────────┘  └───────────┘
+Monday:    "Research the current state of AI agent frameworks"
+           Agent searches, analyzes 12 sources, stores key findings
+
+Friday:    "What did you find about LangChain vs CrewAI?"
+           Agent recalls from memory - no new search needed
+
+Next month: "Update me on AI agents - what's new since my last research?"
+            Agent checks memory, searches only for new developments
 ```
 
-### Why This Stack?
+## Who Is This For?
 
-| Component | Role | Why It's Essential |
-|-----------|------|-------------------|
-| **Quercle** | Real-time web access | AI-processed web content, not raw HTML. Every query returns clean, analyzed data. |
-| **MongoDB** | Persistent memory | Flexible document model fits varied research findings. No rigid schema needed. |
-| **Vercel AI SDK** | LLM orchestration | Unified interface for any LLM provider with built-in streaming and tool support. |
+**Individual researchers, analysts, and curious minds** who:
 
-## Features
+- Track evolving topics over weeks/months (AI news, market trends, tech developments)
+- Return to the same domains repeatedly and hate re-explaining context
+- Want to see exactly what sources the AI used
+- Prefer building cumulative knowledge over one-shot answers
 
-### Core Research
-- **Autonomous Research** - Enter a complex question, watch the agent break it down and investigate
-- **Real-time Progress** - See the agent's thinking process in a live timeline
-- **Comprehensive Reports** - Get well-structured markdown reports with inline citations
-- **Source Tracking** - All sources are tracked and cited in the final report
+**This is NOT for:**
 
-### Persistent Memory (MongoDB)
-- **Remember Facts** - Agent stores key findings, sources, and insights
-- **Recall Across Sessions** - Query past research by topic or semantic search
-- **Session Management** - Organize research into topics and sessions
-- **Knowledge Building** - Agent builds understanding over time, not just one-shot queries
+- One-off questions (just use ChatGPT/Claude/Perplexity)
+- Team collaboration (no multi-user support yet)
+- Real-time data needs (memory is point-in-time snapshots)
 
 ## How It Works
 
-1. **Research Phase** - Agent searches and fetches web content using Quercle
-2. **Memory Phase** - Key findings are stored in MongoDB with metadata
-3. **Recall Phase** - On future queries, agent checks memory before searching again
-4. **Synthesis Phase** - Combines new findings with remembered context
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Your Question                         │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+              ┌────────────────────────┐
+              │  1. Check Memory First │  ← Do I already know this?
+              └────────────┬───────────┘
+                           │
+            ┌──────────────┴──────────────┐
+            │                             │
+            ▼                             ▼
+   ┌─────────────────┐          ┌─────────────────┐
+   │ Memory has info │          │ Need fresh data │
+   │ Return + update │          │ Search the web  │
+   └─────────────────┘          └────────┬────────┘
+                                         │
+                                         ▼
+                                ┌─────────────────┐
+                                │ Store findings  │
+                                │ in memory       │
+                                └────────┬────────┘
+                                         │
+                                         ▼
+                                ┌─────────────────┐
+                                │ Return answer   │
+                                │ with citations  │
+                                └─────────────────┘
+```
 
 ## Quick Start
 
 ### Prerequisites
 
 - [Bun](https://bun.sh) runtime
-- [Quercle API key](https://quercle.dev) (free tier available)
-- [MongoDB Atlas](https://mongodb.com/atlas) connection string (free tier available)
-- OpenRouter or OpenAI API key
+- [Quercle API key](https://quercle.dev) - for web search (free tier available)
+- [MongoDB Atlas](https://mongodb.com/atlas) - for memory storage (free tier available)
+- [OpenRouter API key](https://openrouter.ai) - for LLM access
 
-### Installation
+### Setup
 
 ```bash
-# Clone the repository
 git clone https://github.com/quercle/quercle-research-agent.git
 cd quercle-research-agent
-
-# Install dependencies
 bun install
-
-# Copy environment template
 cp .env.example .env
-
-# Run the development server
+# Edit .env with your API keys
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000)
 
 ### Configuration
 
-Edit `.env` with your credentials:
-
 ```bash
-# Required: Quercle API
-QUERCLE_API_KEY=qk_...
-
-# Required: MongoDB Atlas
-MONGODB_URI=mongodb+srv://...
-
-# Required: LLM Provider (via OpenRouter)
-OPENROUTER_API_KEY=sk-or-...
-
-# Optional: Default model
-DEFAULT_MODEL=anthropic/claude-sonnet-4
+# .env
+QUERCLE_API_KEY=qk_...           # Web search
+MONGODB_URI=mongodb+srv://...     # Memory storage
+OPENROUTER_API_KEY=sk-or-...      # LLM provider
+DEFAULT_MODEL=openai/gpt-4o-mini  # Or any OpenRouter model
 ```
 
-## Agent Tools
+## Features
 
-The agent has access to four tools:
+### Research Flow
+- Enter a question, watch the agent work in real-time
+- See each step: searches, page reads, memory operations
+- Get a structured report with source citations
 
-### `quercleSearch`
+### Persistent Memory
+- Agent stores key findings after each research session
+- Recalls relevant memories before searching again
+- View and manage research history in the sidebar
 
-Search the web for information on any topic.
+### What the Agent Can Do
 
-```typescript
-quercleSearch({ query: "latest developments in quantum computing" })
-// Returns AI-synthesized results from multiple sources
+| Tool | Purpose |
+|------|---------|
+| `quercleSearch` | Search the web, get AI-synthesized results |
+| `quercleFetch` | Read and analyze a specific webpage |
+| `remember` | Store facts in long-term memory |
+| `recall` | Retrieve past research |
+
+## Example: Building Knowledge Over Time
+
+**Session 1: Initial Research**
+```
+You: What are the main approaches to AI agent memory?
+
+Agent: [recall] No previous research found
+       [search] "AI agent memory architectures 2025"
+       [fetch] langchain.com/docs/memory
+       [remember] Stored 6 findings about agent memory
+
+Report: There are three main approaches...
+        1. Buffer memory (recent context)
+        2. Vector memory (semantic search)
+        3. Entity memory (knowledge graphs)
 ```
 
-### `quercleFetch`
+**Session 2: Follow-up (days later)**
+```
+You: How does LangChain implement vector memory?
 
-Analyze a specific webpage with a custom prompt.
+Agent: [recall] Found 2 memories about LangChain memory...
+       [search] "LangChain vector memory implementation" (for details)
+       [remember] Updated findings with implementation specifics
 
-```typescript
-quercleFetch({
-  url: "https://example.com/article",
-  prompt: "Extract the main arguments and statistics"
-})
+Report: Based on my previous research and new findings...
 ```
 
-### `remember`
-
-Store facts and findings in long-term memory.
-
-```typescript
-remember({
-  topic: "quantum-computing",
-  facts: [
-    { content: "IBM unveiled a 1000+ qubit processor", source: "ibm.com" },
-    { content: "Error correction remains the main challenge", source: "nature.com" }
-  ]
-})
+**Session 3: Checking for updates**
 ```
+You: Any new developments in AI agent memory since my last research?
 
-### `recall`
+Agent: [recall] Last researched: 2 weeks ago
+       [search] "AI agent memory" (filtered to last 2 weeks)
 
-Retrieve past research from memory.
-
-```typescript
-recall({
-  topic: "quantum-computing",
-  query: "error correction"  // optional semantic search
-})
+Report: Since your last research, two notable developments...
 ```
-
-## MongoDB Schema
-
-Research memories are stored as flexible documents:
-
-```typescript
-interface ResearchMemory {
-  _id: ObjectId;
-  sessionId: string;
-  topic: string;
-  question: string;
-  facts: Array<{
-    content: string;
-    source: string;
-    confidence: "high" | "medium" | "low";
-    createdAt: Date;
-  }>;
-  sourcesVisited: string[];
-  report?: string;
-  metadata: {
-    model: string;
-    totalSteps: number;
-    duration: number;
-  };
-  createdAt: Date;
-  updatedAt: Date;
-}
-```
-
-### Why MongoDB for Agent Memory?
-
-1. **Flexible Schema** - Research findings vary wildly. Some have citations, images, structured data. MongoDB handles this naturally.
-
-2. **Rich Queries** - Find memories by topic, date range, source domain, or full-text search.
-
-3. **Atlas Search** - Semantic recall finds conceptually related memories, not just keyword matches.
-
-4. **Aggregation Pipeline** - Analyze patterns: most-visited domains, topics over time, knowledge gaps.
-
-5. **Horizontal Scaling** - As agent memory grows, MongoDB scales seamlessly.
 
 ## Tech Stack
 
-- **Framework**: Next.js 16 with App Router
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS v4
-- **Runtime**: Bun
-- **AI SDK**: Vercel AI SDK
-- **Web Intelligence**: Quercle API
-- **Memory**: MongoDB Atlas
+| Component | Choice | Why |
+|-----------|--------|-----|
+| Framework | Next.js 16 | App router, server components |
+| Runtime | Bun | Fast, modern |
+| Web Search | Quercle API | Returns analyzed content, not raw HTML |
+| Memory | MongoDB Atlas | Flexible schema for varied research data |
+| LLM | OpenRouter | Access to multiple models |
+| AI SDK | Vercel AI SDK | Streaming, tool calling |
 
 ## Project Structure
 
 ```
-quercle-research-agent/
-├── app/                    # Next.js App Router
-│   ├── api/               # API routes
-│   └── page.tsx           # Main research UI
+├── app/
+│   ├── api/
+│   │   ├── research/      # Main research endpoint
+│   │   └── history/       # Research history CRUD
+│   └── page.tsx           # Main UI
 ├── components/
-│   ├── ui/                # Base UI components
-│   └── research/          # Research-specific components
+│   ├── ResearchInput.tsx  # Question input
+│   ├── AgentTimeline.tsx  # Step-by-step progress
+│   ├── ReportPanel.tsx    # Final report display
+│   └── HistorySidebar.tsx # Research history
 ├── lib/
-│   ├── agent/             # Agent core logic
-│   │   ├── research-agent.ts
-│   │   ├── types.ts
-│   │   └── tools/         # Agent tools
-│   │       ├── remember.ts
-│   │       └── recall.ts
-│   ├── memory/            # MongoDB integration
-│   │   ├── client.ts
-│   │   ├── schemas.ts
-│   │   └── operations.ts
-│   ├── hooks/             # React hooks
-│   └── quercle-client.ts  # Quercle API client
-└── types/                  # TypeScript declarations
+│   ├── agent/             # Types and utilities
+│   ├── memory/            # MongoDB operations
+│   └── hooks/             # React hooks
 ```
+
+## Limitations
+
+- **Single user** - No authentication or multi-user support
+- **No sharing** - Can't share research or collaborate
+- **Memory grows** - No automatic cleanup of old memories
+- **Quercle dependency** - Web search requires Quercle API
+
+## Future Possibilities
+
+These aren't planned, but the architecture could support:
+
+- Team workspaces with shared memory
+- Scheduled research (track topics automatically)
+- Export/import knowledge bases
+- Custom memory retention policies
 
 ## Development
 
 ```bash
-# Run in development mode
-bun dev
-
-# Build for production
-bun run build
-
-# Start production server
-bun start
-
-# Lint
-bun run lint
+bun dev          # Development server
+bun run build    # Production build
+bun test         # Run tests
+bun run lint     # Lint code
 ```
-
-## Example Session
-
-```
-Research Agent v1.0.0
-
-You: What are the best practices for building AI agents in 2025?
-
-Agent: Let me check if I have any relevant memories...
-       [recall] No previous research on AI agents found.
-
-       Starting fresh research...
-       [web_search] "AI agent best practices 2025"
-       [read_page] Analyzing anthropic.com/research/building-effective-agents
-       [web_search] "AI agent patterns ReAct chain-of-thought"
-       [remember] Stored 8 key findings about AI agent best practices
-
-       Based on my research, here are the best practices:
-
-       1. **Use structured tool definitions** [1]
-          - Clear schemas help LLMs understand available actions
-          - Source: anthropic.com
-
-       2. **Implement proper error handling** [2]
-          - Agents should gracefully handle tool failures
-          - Source: langchain.com
-       ...
-
-You (later): What did Anthropic say about agent design?
-
-Agent: [recall] Found 3 memories about Anthropic's agent research...
-
-       From my previous research, Anthropic recommends:
-       - Keeping tools simple and focused
-       - Using explicit reasoning steps
-       - Providing clear success/failure signals
-```
-
-## Contributing
-
-Contributions are welcome! Please read our contributing guidelines before submitting PRs.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-- [Quercle](https://quercle.dev) - AI-powered web fetching and search API
-- [MongoDB](https://mongodb.com) - Document database for agent memory
-- [Vercel AI SDK](https://sdk.vercel.ai) - AI toolkit for TypeScript
+MIT - see [LICENSE](LICENSE)
 
 ---
 
-**Built with Quercle + MongoDB** - Real-time web intelligence meets persistent memory
+Built with [Quercle](https://quercle.dev) + [MongoDB](https://mongodb.com)
