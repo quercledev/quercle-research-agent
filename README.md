@@ -96,7 +96,7 @@ Open [http://localhost:3000](http://localhost:3000)
 QUERCLE_API_KEY=qk_...           # Web search
 MONGODB_URI=mongodb+srv://...     # Memory storage
 OPENROUTER_API_KEY=sk-or-...      # LLM provider
-DEFAULT_MODEL=openai/gpt-4o-mini  # Or any OpenRouter model
+DEFAULT_MODEL=openai/gpt-5-nano   # Or any OpenRouter model
 ```
 
 ## Features
