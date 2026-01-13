@@ -7,7 +7,7 @@ import { remember, recall } from "@/lib/memory/operations";
 // Backend-only environment variables
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const QUERCLE_API_KEY = process.env.QUERCLE_API_KEY;
-const DEFAULT_MODEL = process.env.DEFAULT_MODEL || "openai/gpt-5-nano";
+const MODEL = process.env.MODEL || "openai/gpt-5-nano";
 
 if (!OPENROUTER_API_KEY) {
   console.error("OPENROUTER_API_KEY not set");
@@ -122,11 +122,11 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("[Research] Starting:", question);
-    console.log("[Research] Model:", DEFAULT_MODEL);
+    console.log("[Research] Model:", MODEL);
 
     // Use streamText with multi-step tool calling for real-time streaming
     const result = streamText({
-      model: openrouter(DEFAULT_MODEL),
+      model: openrouter(MODEL),
       system: systemPrompt,
       prompt: `Research this question thoroughly:\n\n${question}`,
       tools: {
