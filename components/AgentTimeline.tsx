@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { AgentStep, AgentPhase, StepType } from "@/lib/agent/types";
+import { AgentStep, StepType } from "@/lib/agent/types";
 import {
   Brain,
   Search,
@@ -25,7 +25,6 @@ interface StepGroup {
 
 interface AgentTimelineProps {
   steps: AgentStep[];
-  phase: AgentPhase;
 }
 
 const stepConfig: Record<StepType, {
@@ -137,15 +136,15 @@ export function AgentTimeline({ steps }: AgentTimelineProps) {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border/50">
+      <div className="px-4 py-3 border-b border-border/50 shrink-0">
         <h3 className="text-sm font-medium text-foreground">Agent Activity</h3>
         <p className="text-xs text-muted mt-0.5">{steps.length} steps</p>
       </div>
 
-      {/* Timeline */}
-      <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
+      {/* Timeline - scrollable */}
+      <div className="flex-1 overflow-y-auto p-4 min-h-0">
         <div className="space-y-1">
           {stepGroups.map((group, groupIndex) => (
             <StepGroup
@@ -251,7 +250,8 @@ function GroupedStepItem({
   const isRunning = step.status === "running";
   const isComplete = step.status === "complete";
   const isError = step.status === "error";
-  const hasExpandableContent = step.toolOutput != null || step.toolInput != null || (step.type === "thinking" && step.description && step.description.length > 50);
+  const thinkingContent = step.type === "thinking" && ((typeof step.toolOutput === "string" && step.toolOutput) || (step.description && step.description.length > 50));
+  const hasExpandableContent = step.toolInput != null || (step.type !== "thinking" && step.toolOutput != null) || thinkingContent;
 
   return (
     <div
@@ -309,8 +309,8 @@ function GroupedStepItem({
                 </span>
               )}
             </div>
-            {step.description && (
-              <p className={`text-xs text-muted mt-0.5 ${hasExpandableContent ? "ml-4" : ""} ${isDetailExpanded ? "" : "line-clamp-1"}`}>
+            {step.description && !(step.type === "thinking" && isDetailExpanded) && (
+              <p className={`text-xs text-muted mt-0.5 ${hasExpandableContent ? "ml-4" : ""} line-clamp-1`}>
                 {step.description}
               </p>
             )}
@@ -321,28 +321,32 @@ function GroupedStepItem({
         {/* Expanded details */}
         {isDetailExpanded && hasExpandableContent && (
           <div className="mt-1.5 ml-4 space-y-2">
-            {step.toolInput != null && (
-              <div className="bg-white/5 rounded p-2 border border-white/10">
-                <p className="text-xs font-medium text-muted mb-1">Input</p>
-                <pre className="text-xs text-foreground/80 whitespace-pre-wrap break-all overflow-hidden max-h-32 overflow-y-auto">
-                  {formatToolData(step.toolInput)}
-                </pre>
-              </div>
-            )}
-            {step.toolOutput != null && (
-              <div className="bg-white/5 rounded p-2 border border-white/10">
-                <p className="text-xs font-medium text-muted mb-1">Output</p>
-                <pre className="text-xs text-foreground/80 whitespace-pre-wrap break-all overflow-hidden max-h-40 overflow-y-auto">
-                  {formatToolData(step.toolOutput)}
-                </pre>
-              </div>
-            )}
-            {step.type === "thinking" && step.description && !step.toolInput && !step.toolOutput && (
+            {/* For thinking steps, show full content (toolOutput for old history, description for new) */}
+            {step.type === "thinking" ? (
               <div className="bg-white/5 rounded p-2 border border-white/10">
                 <pre className="text-xs text-foreground/80 whitespace-pre-wrap break-all overflow-hidden max-h-40 overflow-y-auto">
-                  {step.description}
+                  {(typeof step.toolOutput === "string" ? step.toolOutput : null) || step.description}
                 </pre>
               </div>
+            ) : (
+              <>
+                {step.toolInput != null && (
+                  <div className="bg-white/5 rounded p-2 border border-white/10">
+                    <p className="text-xs font-medium text-muted mb-1">Input</p>
+                    <pre className="text-xs text-foreground/80 whitespace-pre-wrap break-all overflow-hidden max-h-32 overflow-y-auto">
+                      {formatToolData(step.toolInput)}
+                    </pre>
+                  </div>
+                )}
+                {step.toolOutput != null && (
+                  <div className="bg-white/5 rounded p-2 border border-white/10">
+                    <p className="text-xs font-medium text-muted mb-1">Output</p>
+                    <pre className="text-xs text-foreground/80 whitespace-pre-wrap break-all overflow-hidden max-h-40 overflow-y-auto">
+                      {formatToolData(step.toolOutput)}
+                    </pre>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

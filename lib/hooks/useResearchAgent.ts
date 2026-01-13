@@ -34,6 +34,7 @@ interface StreamEvent {
   id?: string; // For reasoning block ID
   error?: string;
   finishReason?: string;
+  model?: string;
 }
 
 export function useResearchAgent() {
@@ -118,6 +119,15 @@ export function useResearchAgent() {
               const event: StreamEvent = JSON.parse(eventData);
 
               switch (event.type) {
+                case "model": {
+                  if (!event.model) {
+                    console.error("[Stream] model event missing model name");
+                    break;
+                  }
+                  setState((prev) => ({ ...prev, model: event.model! }));
+                  break;
+                }
+
                 case "step-start": {
                   currentStepNumber++;
                   break;
@@ -158,28 +168,59 @@ export function useResearchAgent() {
                 }
 
                 case "tool-result": {
-                  const stepId = event.toolCallId
-                    ? activeToolCalls.current.get(event.toolCallId)
-                    : null;
-
-                  if (stepId) {
+                  if (!event.toolCallId) {
+                    console.error("[Stream] tool-result missing toolCallId");
                     setState((prev) => ({
                       ...prev,
-                      steps: prev.steps.map((s) =>
-                        s.id === stepId
-                          ? {
-                              ...s,
-                              status: "complete" as const,
-                              duration: Date.now() - s.timestamp.getTime(),
-                              toolOutput: event.result,
-                            }
-                          : s
-                      ),
+                      steps: [
+                        ...prev.steps,
+                        {
+                          id: generateId(),
+                          type: "error" as const,
+                          title: "Stream Error",
+                          description: `tool-result missing toolCallId for ${event.toolName}`,
+                          status: "error" as const,
+                          timestamp: new Date(),
+                        },
+                      ],
                     }));
-                    if (event.toolCallId) {
-                      activeToolCalls.current.delete(event.toolCallId);
-                    }
+                    break;
                   }
+
+                  const stepId = activeToolCalls.current.get(event.toolCallId);
+                  if (!stepId) {
+                    console.error("[Stream] tool-result: no step found for toolCallId:", event.toolCallId);
+                    setState((prev) => ({
+                      ...prev,
+                      steps: [
+                        ...prev.steps,
+                        {
+                          id: generateId(),
+                          type: "error" as const,
+                          title: "Stream Error",
+                          description: `tool-result: no step found for toolCallId ${event.toolCallId}`,
+                          status: "error" as const,
+                          timestamp: new Date(),
+                        },
+                      ],
+                    }));
+                    break;
+                  }
+
+                  setState((prev) => ({
+                    ...prev,
+                    steps: prev.steps.map((s) =>
+                      s.id === stepId
+                        ? {
+                            ...s,
+                            status: "complete" as const,
+                            duration: Date.now() - s.timestamp.getTime(),
+                            toolOutput: event.result,
+                          }
+                        : s
+                    ),
+                  }));
+                  activeToolCalls.current.delete(event.toolCallId);
                   break;
                 }
 
@@ -248,8 +289,26 @@ export function useResearchAgent() {
                 }
 
                 case "reasoning-start": {
-                  // Start of a new reasoning block
-                  const reasoningId = event.id || generateId();
+                  const reasoningId = event.id;
+                  if (!reasoningId) {
+                    console.error("[Stream] reasoning-start event missing id");
+                    setState((prev) => ({
+                      ...prev,
+                      steps: [
+                        ...prev.steps,
+                        {
+                          id: generateId(),
+                          type: "error" as const,
+                          title: "Stream Error",
+                          description: "reasoning-start event missing id",
+                          status: "error" as const,
+                          timestamp: new Date(),
+                        },
+                      ],
+                    }));
+                    break;
+                  }
+
                   const stepId = generateId();
                   activeReasoningBlocks.current.set(reasoningId, { stepId, fullText: "" });
 
@@ -272,52 +331,89 @@ export function useResearchAgent() {
                 }
 
                 case "reasoning-delta": {
-                  // Reasoning content chunk
-                  const reasoningId = event.id || "";
+                  const reasoningId = event.id;
                   const reasoningText = event.text || "";
+
+                  if (!reasoningId) {
+                    console.error("[Stream] reasoning-delta event missing id");
+                    break;
+                  }
                   if (!reasoningText) break;
 
                   const block = activeReasoningBlocks.current.get(reasoningId);
-                  if (block) {
-                    block.fullText += reasoningText;
-                    const preview = block.fullText.slice(0, 200) + (block.fullText.length > 200 ? "..." : "");
-
+                  if (!block) {
+                    console.error("[Stream] reasoning-delta: no block found for id:", reasoningId);
                     setState((prev) => ({
                       ...prev,
-                      steps: prev.steps.map((s) =>
-                        s.id === block.stepId
-                          ? { ...s, description: preview, toolOutput: block.fullText }
-                          : s
-                      ),
+                      steps: [
+                        ...prev.steps,
+                        {
+                          id: generateId(),
+                          type: "error" as const,
+                          title: "Stream Error",
+                          description: `reasoning-delta: no block found for id ${reasoningId}`,
+                          status: "error" as const,
+                          timestamp: new Date(),
+                        },
+                      ],
                     }));
+                    break;
                   }
+
+                  block.fullText += reasoningText;
+
+                  setState((prev) => ({
+                    ...prev,
+                    steps: prev.steps.map((s) =>
+                      s.id === block.stepId
+                        ? { ...s, description: block.fullText }
+                        : s
+                    ),
+                  }));
                   break;
                 }
 
                 case "reasoning-end": {
-                  // End of reasoning block - mark as complete or remove if empty/redacted
-                  const reasoningId = event.id || "";
-                  const block = activeReasoningBlocks.current.get(reasoningId);
-                  if (block) {
-                    const text = block.fullText.trim();
-                    const isRedactedOrEmpty = !text || text === "[REDACTED]" || text.length < 10;
+                  const reasoningId = event.id;
 
+                  if (!reasoningId) {
+                    console.error("[Stream] reasoning-end event missing id");
+                    break;
+                  }
+
+                  const block = activeReasoningBlocks.current.get(reasoningId);
+                  if (!block) {
+                    console.error("[Stream] reasoning-end: no block found for id:", reasoningId);
                     setState((prev) => ({
                       ...prev,
-                      steps: isRedactedOrEmpty
-                        ? prev.steps.filter((s) => s.id !== block.stepId) // Remove empty/redacted
-                        : prev.steps.map((s) =>
-                            s.id === block.stepId
-                              ? {
-                                  ...s,
-                                  status: "complete" as const,
-                                  duration: Date.now() - s.timestamp.getTime(),
-                                }
-                              : s
-                          ),
+                      steps: [
+                        ...prev.steps,
+                        {
+                          id: generateId(),
+                          type: "error" as const,
+                          title: "Stream Error",
+                          description: `reasoning-end: no block found for id ${reasoningId}`,
+                          status: "error" as const,
+                          timestamp: new Date(),
+                        },
+                      ],
                     }));
-                    activeReasoningBlocks.current.delete(reasoningId);
+                    break;
                   }
+
+                  setState((prev) => ({
+                    ...prev,
+                    steps: prev.steps.map((s) =>
+                      s.id === block.stepId
+                        ? {
+                            ...s,
+                            status: "complete" as const,
+                            duration: Date.now() - s.timestamp.getTime(),
+                          }
+                        : s
+                    ),
+                  }));
+                  activeReasoningBlocks.current.delete(reasoningId);
                   break;
                 }
               }
@@ -392,11 +488,13 @@ export function useResearchAgent() {
               toolOutput: s.toolOutput,
               duration: s.duration,
               timestamp: s.timestamp,
+              stepNumber: s.stepNumber,
             })),
             status: finalState.phase,
             error: finalState.error,
             startedAt: startTimeRef.current?.toISOString(),
             completedAt: finalState.endTime?.toISOString(),
+            model: finalState.model,
           }),
         });
 
@@ -438,17 +536,15 @@ export function useResearchAgent() {
       setState({
         phase: research.status,
         question: research.question,
-        subQuestions: [],
         steps: research.steps.map((s: AgentStep) => ({
           ...s,
           timestamp: new Date(s.timestamp),
         })),
-        sources: [],
-        currentStepIndex: research.steps.length - 1,
         report: research.report,
         error: research.error || null,
         startTime: new Date(research.startedAt),
         endTime: research.completedAt ? new Date(research.completedAt) : null,
+        model: research.model || null,
       });
     } catch (error) {
       console.error("Failed to load research:", error);

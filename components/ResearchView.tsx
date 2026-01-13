@@ -28,6 +28,11 @@ export function ResearchView({
           </h2>
           <div className="flex items-center gap-3 mt-1">
             <StatusBadge phase={state.phase} />
+            {state.model && (
+              <span className="text-xs text-muted bg-white/5 px-2 py-0.5 rounded">
+                {state.model}
+              </span>
+            )}
             {state.startTime && (
               <span className="text-xs text-muted">
                 {formatDuration(state.startTime, state.endTime)}
@@ -57,20 +62,17 @@ export function ResearchView({
       </div>
 
       {/* Main content grid */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0">
-        {/* Timeline - narrower on desktop */}
-        <div className="lg:col-span-4 xl:col-span-3 min-h-[300px] lg:min-h-0">
-          <div className="glass-bright rounded-2xl h-full overflow-hidden">
-            <AgentTimeline
-              steps={state.steps}
-              phase={state.phase}
-            />
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0 overflow-hidden">
+        {/* Timeline - narrower on desktop, max height to enable scrolling */}
+        <div className="lg:col-span-4 xl:col-span-3 min-h-[300px] max-h-[50vh] lg:max-h-[calc(100vh-180px)]">
+          <div className="glass-bright rounded-2xl h-full flex flex-col overflow-hidden">
+            <AgentTimeline steps={state.steps} />
           </div>
         </div>
 
         {/* Report - wider on desktop */}
-        <div className="lg:col-span-8 xl:col-span-9 min-h-[400px] lg:min-h-0">
-          <div className="glass-bright rounded-2xl h-full overflow-hidden">
+        <div className="lg:col-span-8 xl:col-span-9 min-h-[400px] max-h-[70vh] lg:min-h-0 lg:max-h-[calc(100vh-180px)]">
+          <div className="glass-bright rounded-2xl h-full flex flex-col overflow-hidden">
             <ReportPanel
               report={state.report}
               isLoading={isRunning}

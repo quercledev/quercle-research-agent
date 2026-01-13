@@ -9,6 +9,7 @@ interface HistoryItem {
   status: "researching" | "synthesizing" | "complete" | "error";
   startedAt: string;
   duration: number | null;
+  model: string | null;
 }
 
 interface HistorySidebarProps {
@@ -159,7 +160,7 @@ export function HistorySidebar({ isOpen, onClose, onSelect, currentResearchId }:
                       <p className="text-sm text-foreground font-medium line-clamp-2">
                         {item.question}
                       </p>
-                      <div className="flex items-center gap-2 mt-1.5">
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         <StatusIcon status={item.status} />
                         <span className="text-xs text-muted">
                           {formatDate(item.startedAt)}
@@ -167,6 +168,11 @@ export function HistorySidebar({ isOpen, onClose, onSelect, currentResearchId }:
                         {item.duration && (
                           <span className="text-xs text-muted/70">
                             {formatDuration(item.duration)}
+                          </span>
+                        )}
+                        {item.model && (
+                          <span className="text-xs text-muted/50 bg-white/5 px-1.5 py-0.5 rounded">
+                            {item.model.split("/").pop()}
                           </span>
                         )}
                       </div>
