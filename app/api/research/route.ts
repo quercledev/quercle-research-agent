@@ -196,13 +196,16 @@ export async function POST(request: NextRequest) {
 
         try {
           for await (const part of result.fullStream) {
-            // Log ALL events to debug
-            console.log("[FullStream]", part.type);
-
             switch (part.type) {
+              case "start-step":
+                send({ type: "step-start" });
+                break;
+
+              case "finish-step":
+                send({ type: "step-finish" });
+                break;
+
               case "tool-call":
-                // Tool call with full args - send immediately
-                console.log("[SSE] tool-call:", part.toolCallId, part.toolName, JSON.stringify(part.input).slice(0, 100));
                 send({
                   type: "tool-call",
                   toolCallId: part.toolCallId,
@@ -239,6 +242,35 @@ export async function POST(request: NextRequest) {
                   type: "error",
                   error: String(part.error),
                 });
+                break;
+
+              case "tool-error":
+                // Tool execution failed - send as tool-result with error
+                send({
+                  type: "tool-result",
+                  toolCallId: part.toolCallId,
+                  toolName: part.toolName,
+                  result: { error: String(part.error) },
+                });
+                break;
+
+              default:
+                // Handle reasoning/thinking content from models with extended thinking
+                // Types may not include all runtime part types (reasoning-start, reasoning-delta, reasoning-end)
+                if (part.type === "reasoning-start") {
+                  const reasoningPart = part as { id?: string };
+                  send({ type: "reasoning-start", id: reasoningPart.id || "" });
+                } else if (part.type === "reasoning-delta") {
+                  const reasoningPart = part as { id?: string; text?: string; delta?: string };
+                  send({
+                    type: "reasoning-delta",
+                    id: reasoningPart.id || "",
+                    text: reasoningPart.text || reasoningPart.delta || "",
+                  });
+                } else if (part.type === "reasoning-end") {
+                  const reasoningPart = part as { id?: string };
+                  send({ type: "reasoning-end", id: reasoningPart.id || "" });
+                }
                 break;
             }
           }

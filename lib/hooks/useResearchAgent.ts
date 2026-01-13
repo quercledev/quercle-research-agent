@@ -30,6 +30,8 @@ interface StreamEvent {
   result?: unknown;
   delta?: string;
   textDelta?: string;
+  text?: string; // For reasoning events
+  id?: string; // For reasoning block ID
   error?: string;
   finishReason?: string;
 }
@@ -40,6 +42,7 @@ export function useResearchAgent() {
   const [currentResearchId, setCurrentResearchId] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeToolCalls = useRef<Map<string, string>>(new Map());
+  const activeReasoningBlocks = useRef<Map<string, { stepId: string; fullText: string }>>(new Map());
   const startTimeRef = useRef<Date | null>(null);
 
   const startResearch = useCallback(async (question: string) => {
@@ -64,11 +67,13 @@ export function useResearchAgent() {
     });
     setIsRunning(true);
     activeToolCalls.current.clear();
+    activeReasoningBlocks.current.clear();
 
     abortControllerRef.current = new AbortController();
 
     let fullText = "";
     let synthesisStepId: string | null = null;
+    let currentStepNumber = 0;
 
     try {
       const response = await fetch("/api/research", {
@@ -113,8 +118,17 @@ export function useResearchAgent() {
               const event: StreamEvent = JSON.parse(eventData);
 
               switch (event.type) {
+                case "step-start": {
+                  currentStepNumber++;
+                  break;
+                }
+
+                case "step-finish": {
+                  // Step finished, next tool calls will be in a new step
+                  break;
+                }
+
                 case "tool-call": {
-                  // Initial tool call - may have empty args initially
                   const toolName = event.toolName || "unknown";
                   const stepId = generateId();
                   if (event.toolCallId) {
@@ -136,6 +150,7 @@ export function useResearchAgent() {
                         status: "running",
                         timestamp: new Date(),
                         toolInput: args,
+                        stepNumber: currentStepNumber,
                       },
                     ],
                   }));
@@ -231,8 +246,82 @@ export function useResearchAgent() {
                 case "error": {
                   throw new Error(event.error || "Stream error");
                 }
+
+                case "reasoning-start": {
+                  // Start of a new reasoning block
+                  const reasoningId = event.id || generateId();
+                  const stepId = generateId();
+                  activeReasoningBlocks.current.set(reasoningId, { stepId, fullText: "" });
+
+                  setState((prev) => ({
+                    ...prev,
+                    steps: [
+                      ...prev.steps,
+                      {
+                        id: stepId,
+                        type: "thinking" as const,
+                        title: "Thinking",
+                        description: "",
+                        status: "running" as const,
+                        timestamp: new Date(),
+                        stepNumber: currentStepNumber,
+                      },
+                    ],
+                  }));
+                  break;
+                }
+
+                case "reasoning-delta": {
+                  // Reasoning content chunk
+                  const reasoningId = event.id || "";
+                  const reasoningText = event.text || "";
+                  if (!reasoningText) break;
+
+                  const block = activeReasoningBlocks.current.get(reasoningId);
+                  if (block) {
+                    block.fullText += reasoningText;
+                    const preview = block.fullText.slice(0, 200) + (block.fullText.length > 200 ? "..." : "");
+
+                    setState((prev) => ({
+                      ...prev,
+                      steps: prev.steps.map((s) =>
+                        s.id === block.stepId
+                          ? { ...s, description: preview, toolOutput: block.fullText }
+                          : s
+                      ),
+                    }));
+                  }
+                  break;
+                }
+
+                case "reasoning-end": {
+                  // End of reasoning block - mark as complete or remove if empty/redacted
+                  const reasoningId = event.id || "";
+                  const block = activeReasoningBlocks.current.get(reasoningId);
+                  if (block) {
+                    const text = block.fullText.trim();
+                    const isRedactedOrEmpty = !text || text === "[REDACTED]" || text.length < 10;
+
+                    setState((prev) => ({
+                      ...prev,
+                      steps: isRedactedOrEmpty
+                        ? prev.steps.filter((s) => s.id !== block.stepId) // Remove empty/redacted
+                        : prev.steps.map((s) =>
+                            s.id === block.stepId
+                              ? {
+                                  ...s,
+                                  status: "complete" as const,
+                                  duration: Date.now() - s.timestamp.getTime(),
+                                }
+                              : s
+                          ),
+                    }));
+                    activeReasoningBlocks.current.delete(reasoningId);
+                  }
+                  break;
+                }
               }
-            } catch (parseError) {
+            } catch {
               // If it's not JSON, it might be raw text or a parsing error
               // Only log actual parse errors, not intentional non-JSON lines
               if (eventData.startsWith("{")) {

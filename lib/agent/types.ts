@@ -39,6 +39,7 @@ export interface AgentStep {
   timestamp: Date;
   duration?: number;
   error?: string;
+  stepNumber?: number; // For grouping parallel tool calls
 }
 
 export interface AgentState {
