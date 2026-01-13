@@ -6,6 +6,16 @@ import { AgentState, AgentStep, StepType, createInitialState } from "../agent/ty
 // Generate unique IDs
 const generateId = () => Math.random().toString(36).slice(2, 11);
 
+// Create an error step for stream issues
+const createErrorStep = (description: string): AgentStep => ({
+  id: generateId(),
+  type: "error",
+  title: "Stream Error",
+  description,
+  status: "error",
+  timestamp: new Date(),
+});
+
 // Tool name to step type mapping
 const toolToStepType: Record<string, StepType> = {
   quercleSearch: "search",
@@ -172,17 +182,7 @@ export function useResearchAgent() {
                     console.error("[Stream] tool-result missing toolCallId");
                     setState((prev) => ({
                       ...prev,
-                      steps: [
-                        ...prev.steps,
-                        {
-                          id: generateId(),
-                          type: "error" as const,
-                          title: "Stream Error",
-                          description: `tool-result missing toolCallId for ${event.toolName}`,
-                          status: "error" as const,
-                          timestamp: new Date(),
-                        },
-                      ],
+                      steps: [...prev.steps, createErrorStep(`tool-result missing toolCallId for ${event.toolName}`)],
                     }));
                     break;
                   }
@@ -192,17 +192,7 @@ export function useResearchAgent() {
                     console.error("[Stream] tool-result: no step found for toolCallId:", event.toolCallId);
                     setState((prev) => ({
                       ...prev,
-                      steps: [
-                        ...prev.steps,
-                        {
-                          id: generateId(),
-                          type: "error" as const,
-                          title: "Stream Error",
-                          description: `tool-result: no step found for toolCallId ${event.toolCallId}`,
-                          status: "error" as const,
-                          timestamp: new Date(),
-                        },
-                      ],
+                      steps: [...prev.steps, createErrorStep(`tool-result: no step found for toolCallId ${event.toolCallId}`)],
                     }));
                     break;
                   }
@@ -294,17 +284,7 @@ export function useResearchAgent() {
                     console.error("[Stream] reasoning-start event missing id");
                     setState((prev) => ({
                       ...prev,
-                      steps: [
-                        ...prev.steps,
-                        {
-                          id: generateId(),
-                          type: "error" as const,
-                          title: "Stream Error",
-                          description: "reasoning-start event missing id",
-                          status: "error" as const,
-                          timestamp: new Date(),
-                        },
-                      ],
+                      steps: [...prev.steps, createErrorStep("reasoning-start event missing id")],
                     }));
                     break;
                   }
@@ -336,6 +316,10 @@ export function useResearchAgent() {
 
                   if (!reasoningId) {
                     console.error("[Stream] reasoning-delta event missing id");
+                    setState((prev) => ({
+                      ...prev,
+                      steps: [...prev.steps, createErrorStep("reasoning-delta event missing id")],
+                    }));
                     break;
                   }
                   if (!reasoningText) break;
@@ -345,17 +329,7 @@ export function useResearchAgent() {
                     console.error("[Stream] reasoning-delta: no block found for id:", reasoningId);
                     setState((prev) => ({
                       ...prev,
-                      steps: [
-                        ...prev.steps,
-                        {
-                          id: generateId(),
-                          type: "error" as const,
-                          title: "Stream Error",
-                          description: `reasoning-delta: no block found for id ${reasoningId}`,
-                          status: "error" as const,
-                          timestamp: new Date(),
-                        },
-                      ],
+                      steps: [...prev.steps, createErrorStep(`reasoning-delta: no block found for id ${reasoningId}`)],
                     }));
                     break;
                   }
@@ -378,6 +352,10 @@ export function useResearchAgent() {
 
                   if (!reasoningId) {
                     console.error("[Stream] reasoning-end event missing id");
+                    setState((prev) => ({
+                      ...prev,
+                      steps: [...prev.steps, createErrorStep("reasoning-end event missing id")],
+                    }));
                     break;
                   }
 
@@ -386,17 +364,7 @@ export function useResearchAgent() {
                     console.error("[Stream] reasoning-end: no block found for id:", reasoningId);
                     setState((prev) => ({
                       ...prev,
-                      steps: [
-                        ...prev.steps,
-                        {
-                          id: generateId(),
-                          type: "error" as const,
-                          title: "Stream Error",
-                          description: `reasoning-end: no block found for id ${reasoningId}`,
-                          status: "error" as const,
-                          timestamp: new Date(),
-                        },
-                      ],
+                      steps: [...prev.steps, createErrorStep(`reasoning-end: no block found for id ${reasoningId}`)],
                     }));
                     break;
                   }
