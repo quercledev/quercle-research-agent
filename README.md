@@ -2,6 +2,8 @@
 
 An AI research assistant that **remembers what it learns**. Built for individuals who research the same topics repeatedly and want to build knowledge over time, not start from scratch each session.
 
+![Research Agent Screenshot](docs/images/research-agent-screenshot.png)
+
 ## The Problem
 
 You're researching AI agent frameworks. You spend 30 minutes with ChatGPT, get great results, close the tab. Next week you need to continue that research - but the AI has forgotten everything. You start over.
