@@ -7,7 +7,7 @@ import { remember, recall } from "@/lib/memory/operations";
 // Backend-only environment variables
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const QUERCLE_API_KEY = process.env.QUERCLE_API_KEY;
-const DEFAULT_MODEL = process.env.DEFAULT_MODEL || "openai/gpt-5-nano";
+const MODEL = process.env.MODEL || "openai/gpt-5-nano";
 
 if (!OPENROUTER_API_KEY) {
   console.error("OPENROUTER_API_KEY not set");
@@ -76,22 +76,54 @@ async function executeRecall(topic?: string, query?: string) {
   return await recall({ topic, query, limit: 5 });
 }
 
-const systemPrompt = `You are a research assistant with web search capabilities and persistent memory.
+// Get today's date in English format
+function getTodayDate(): string {
+  return new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
 
-Available tools:
-- quercleSearch: Search the web for information
-- quercleFetch: Read and analyze a specific webpage
-- recall: Check your memory for relevant past research
-- remember: Store important facts for future reference
+// Generate system prompt with current date
+function getSystemPrompt(todayDate: string): string {
+  return `You are a research assistant with web search capabilities and persistent memory.
 
-Research process:
-1. First use recall to check if you have relevant memories
-2. Use quercleSearch to find information
-3. Use quercleFetch to dive deeper into specific sources if needed
-4. Use remember to store key findings
-5. Synthesize everything into a comprehensive answer
+Today's date: ${todayDate}
 
-Always provide a detailed, well-structured response with citations where applicable.`;
+## Available Tools
+
+**Web Research:**
+- quercleSearch: Search the web for information on any topic
+- quercleFetch: Read and analyze a specific webpage in detail
+
+**Memory System (IMPORTANT):**
+- recall: Read from your persistent memory. Use this FIRST at the start of every research to check what you already know about the topic. This helps avoid redundant searches and builds on past research.
+- remember: Write to your persistent memory. Use this at the END of your research to store key findings, facts, and insights for future reference. Include source URLs when available.
+
+## Research Process
+
+1. **START with memory**: Always call recall first to check existing knowledge about the topic
+2. **Search the web**: Use quercleSearch to find current information (2-3 calls max)
+3. **Deep dive sources**: Use quercleFetch for the most important/relevant sources (2-3 calls max)
+4. **SAVE to memory**: Before writing your response, use remember to store the most important new findings
+5. **Write response**: ALWAYS end by writing a comprehensive text response
+
+IMPORTANT: You MUST write a final text response to the user. Do not end with only tool calls.
+
+Keep tool usage efficient - aim for 5-8 total tool calls before writing your response.
+
+## Response Formatting
+
+Your final response MUST use proper Markdown formatting:
+- Use ## headers for main sections
+- Use **bold** for emphasis and key terms
+- Use bullet points and numbered lists for clarity
+- Include [source links](url) for citations
+- Use > blockquotes for important quotes
+- Use code blocks if showing technical content`;
+}
 
 export async function POST(request: NextRequest) {
   if (!OPENROUTER_API_KEY || !QUERCLE_API_KEY) {
@@ -122,11 +154,15 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("[Research] Starting:", question);
-    console.log("[Research] Model:", DEFAULT_MODEL);
+    console.log("[Research] Model:", MODEL);
+
+    // Get today's date once for this request
+    const todayDate = getTodayDate();
+    const systemPrompt = getSystemPrompt(todayDate);
 
     // Use streamText with multi-step tool calling for real-time streaming
     const result = streamText({
-      model: openrouter(DEFAULT_MODEL),
+      model: openrouter(MODEL),
       system: systemPrompt,
       prompt: `Research this question thoroughly:\n\n${question}`,
       tools: {
@@ -175,7 +211,7 @@ export async function POST(request: NextRequest) {
           },
         },
       },
-      stopWhen: stepCountIs(10),
+      stopWhen: stepCountIs(20),
       onStepFinish: ({ text, toolCalls }) => {
         if (toolCalls && toolCalls.length > 0) {
           console.log("[Step] Tool calls:", toolCalls.map((t: { toolName: string }) => t.toolName));
@@ -195,14 +231,20 @@ export async function POST(request: NextRequest) {
         };
 
         try {
-          for await (const part of result.fullStream) {
-            // Log ALL events to debug
-            console.log("[FullStream]", part.type);
+          // Send model info at the start
+          send({ type: "model", model: MODEL });
 
+          for await (const part of result.fullStream) {
             switch (part.type) {
+              case "start-step":
+                send({ type: "step-start" });
+                break;
+
+              case "finish-step":
+                send({ type: "step-finish" });
+                break;
+
               case "tool-call":
-                // Tool call with full args - send immediately
-                console.log("[SSE] tool-call:", part.toolCallId, part.toolName, JSON.stringify(part.input).slice(0, 100));
                 send({
                   type: "tool-call",
                   toolCallId: part.toolCallId,
@@ -221,6 +263,9 @@ export async function POST(request: NextRequest) {
                 break;
 
               case "text-delta":
+                if (part.text) {
+                  console.log("[Stream] text-delta:", part.text.slice(0, 50));
+                }
                 send({
                   type: "text-delta",
                   delta: part.text,
@@ -239,6 +284,41 @@ export async function POST(request: NextRequest) {
                   type: "error",
                   error: String(part.error),
                 });
+                break;
+
+              case "tool-error":
+                // Tool execution failed - send as tool-result with error
+                send({
+                  type: "tool-result",
+                  toolCallId: part.toolCallId,
+                  toolName: part.toolName,
+                  result: { error: String(part.error) },
+                });
+                break;
+
+              default:
+                // Handle reasoning/thinking content from models with extended thinking
+                // Types may not include all runtime part types (reasoning-start, reasoning-delta, reasoning-end)
+                if (part.type === "reasoning-start") {
+                  const reasoningPart = part as { id?: string };
+                  if (reasoningPart.id) {
+                    send({ type: "reasoning-start", id: reasoningPart.id });
+                  }
+                } else if (part.type === "reasoning-delta") {
+                  const reasoningPart = part as { id?: string; text?: string; delta?: string };
+                  if (reasoningPart.id) {
+                    send({
+                      type: "reasoning-delta",
+                      id: reasoningPart.id,
+                      text: reasoningPart.text || reasoningPart.delta || "",
+                    });
+                  }
+                } else if (part.type === "reasoning-end") {
+                  const reasoningPart = part as { id?: string };
+                  if (reasoningPart.id) {
+                    send({ type: "reasoning-end", id: reasoningPart.id });
+                  }
+                }
                 break;
             }
           }

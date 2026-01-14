@@ -10,6 +10,7 @@ if (!MONGODB_URI) {
 
 let client: MongoClient | null = null;
 let db: Db | null = null;
+let indexesEnsured = false;
 
 export async function getMongoClient(): Promise<MongoClient | null> {
   if (!MONGODB_URI) {
@@ -51,7 +52,15 @@ export async function getMemoriesCollection(): Promise<Collection<ResearchMemory
     return null;
   }
 
-  return database.collection<ResearchMemory>("memories");
+  const collection = database.collection<ResearchMemory>("memories");
+
+  // Ensure indexes on first access
+  if (!indexesEnsured) {
+    indexesEnsured = true;
+    await ensureIndexes(database);
+  }
+
+  return collection;
 }
 
 export async function getResearchHistoryCollection(): Promise<Collection<ResearchHistory> | null> {
@@ -63,11 +72,13 @@ export async function getResearchHistoryCollection(): Promise<Collection<Researc
   return database.collection<ResearchHistory>("research_history");
 }
 
-export async function ensureIndexes(): Promise<void> {
-  const collection = await getMemoriesCollection();
-  if (!collection) {
+export async function ensureIndexes(database?: Db): Promise<void> {
+  const db = database || await getDatabase();
+  if (!db) {
     return;
   }
+
+  const collection = db.collection<ResearchMemory>("memories");
 
   // Create indexes for common queries
   await collection.createIndex({ topic: 1 });

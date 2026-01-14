@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const { question, report, steps, status, error, startedAt, completedAt } = body;
+    const { question, report, steps, status, error, startedAt, completedAt, model } = body;
 
     if (!question) {
       return Response.json({ error: "Question is required" }, { status: 400 });
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
       error: error || null,
       startedAt: new Date(startedAt),
       completedAt: completedAt ? new Date(completedAt) : new Date(),
+      model: model || null,
     });
 
     if (!result.success) {

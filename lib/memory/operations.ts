@@ -251,6 +251,7 @@ export interface SaveResearchInput {
   error?: string | null;
   startedAt: Date;
   completedAt?: Date | null;
+  model?: string | null;
 }
 
 export interface ResearchHistoryItem {
@@ -263,6 +264,7 @@ export interface ResearchHistoryItem {
   startedAt: Date;
   completedAt: Date | null;
   duration: number | null;
+  model: string | null;
 }
 
 /**
@@ -287,6 +289,7 @@ export async function saveResearch(input: SaveResearchInput): Promise<{ success:
     startedAt: input.startedAt,
     completedAt: now,
     duration,
+    model: input.model || null,
   };
 
   const result = await collection.insertOne(research);
@@ -324,6 +327,7 @@ export async function getResearch(id: string): Promise<ResearchHistoryItem | nul
       startedAt: research.startedAt,
       completedAt: research.completedAt || null,
       duration: research.duration || null,
+      model: research.model || null,
     };
   } catch {
     return null;
@@ -356,6 +360,7 @@ export async function listResearchHistory(limit: number = 20): Promise<ResearchH
     startedAt: r.startedAt,
     completedAt: r.completedAt || null,
     duration: r.duration || null,
+    model: r.model || null,
   }));
 }
 

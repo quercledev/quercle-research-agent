@@ -74,9 +74,9 @@ export function ReportPanel({ report, isLoading, phase }: ReportPanelProps) {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-1">
           <button
             onClick={() => setViewMode("rendered")}
@@ -87,7 +87,7 @@ export function ReportPanel({ report, isLoading, phase }: ReportPanelProps) {
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            Preview
+            Rendered
           </button>
           <button
             onClick={() => setViewMode("raw")}
@@ -98,7 +98,7 @@ export function ReportPanel({ report, isLoading, phase }: ReportPanelProps) {
             }`}
           >
             <Code className="w-3.5 h-3.5" />
-            Markdown
+            Source
           </button>
         </div>
         <button
@@ -121,7 +121,7 @@ export function ReportPanel({ report, isLoading, phase }: ReportPanelProps) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-6 min-h-0">
         {viewMode === "rendered" ? (
           <div className={`prose prose-sm max-w-none ${isLoading ? "typing-cursor" : ""}`}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>

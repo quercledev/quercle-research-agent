@@ -6,6 +6,16 @@ import { AgentState, AgentStep, StepType, createInitialState } from "../agent/ty
 // Generate unique IDs
 const generateId = () => Math.random().toString(36).slice(2, 11);
 
+// Create an error step for stream issues
+const createErrorStep = (description: string): AgentStep => ({
+  id: generateId(),
+  type: "error",
+  title: "Stream Error",
+  description,
+  status: "error",
+  timestamp: new Date(),
+});
+
 // Tool name to step type mapping
 const toolToStepType: Record<string, StepType> = {
   quercleSearch: "search",
@@ -30,8 +40,11 @@ interface StreamEvent {
   result?: unknown;
   delta?: string;
   textDelta?: string;
+  text?: string; // For reasoning events
+  id?: string; // For reasoning block ID
   error?: string;
   finishReason?: string;
+  model?: string;
 }
 
 export function useResearchAgent() {
@@ -40,6 +53,7 @@ export function useResearchAgent() {
   const [currentResearchId, setCurrentResearchId] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeToolCalls = useRef<Map<string, string>>(new Map());
+  const activeReasoningBlocks = useRef<Map<string, { stepId: string; fullText: string }>>(new Map());
   const startTimeRef = useRef<Date | null>(null);
 
   const startResearch = useCallback(async (question: string) => {
@@ -64,11 +78,13 @@ export function useResearchAgent() {
     });
     setIsRunning(true);
     activeToolCalls.current.clear();
+    activeReasoningBlocks.current.clear();
 
     abortControllerRef.current = new AbortController();
 
     let fullText = "";
     let synthesisStepId: string | null = null;
+    let currentStepNumber = 0;
 
     try {
       const response = await fetch("/api/research", {
@@ -113,8 +129,26 @@ export function useResearchAgent() {
               const event: StreamEvent = JSON.parse(eventData);
 
               switch (event.type) {
+                case "model": {
+                  if (!event.model) {
+                    console.error("[Stream] model event missing model name");
+                    break;
+                  }
+                  setState((prev) => ({ ...prev, model: event.model! }));
+                  break;
+                }
+
+                case "step-start": {
+                  currentStepNumber++;
+                  break;
+                }
+
+                case "step-finish": {
+                  // Step finished, next tool calls will be in a new step
+                  break;
+                }
+
                 case "tool-call": {
-                  // Initial tool call - may have empty args initially
                   const toolName = event.toolName || "unknown";
                   const stepId = generateId();
                   if (event.toolCallId) {
@@ -136,6 +170,7 @@ export function useResearchAgent() {
                         status: "running",
                         timestamp: new Date(),
                         toolInput: args,
+                        stepNumber: currentStepNumber,
                       },
                     ],
                   }));
@@ -143,28 +178,39 @@ export function useResearchAgent() {
                 }
 
                 case "tool-result": {
-                  const stepId = event.toolCallId
-                    ? activeToolCalls.current.get(event.toolCallId)
-                    : null;
-
-                  if (stepId) {
+                  if (!event.toolCallId) {
+                    console.error("[Stream] tool-result missing toolCallId");
                     setState((prev) => ({
                       ...prev,
-                      steps: prev.steps.map((s) =>
-                        s.id === stepId
-                          ? {
-                              ...s,
-                              status: "complete" as const,
-                              duration: Date.now() - s.timestamp.getTime(),
-                              toolOutput: event.result,
-                            }
-                          : s
-                      ),
+                      steps: [...prev.steps, createErrorStep(`tool-result missing toolCallId for ${event.toolName}`)],
                     }));
-                    if (event.toolCallId) {
-                      activeToolCalls.current.delete(event.toolCallId);
-                    }
+                    break;
                   }
+
+                  const stepId = activeToolCalls.current.get(event.toolCallId);
+                  if (!stepId) {
+                    console.error("[Stream] tool-result: no step found for toolCallId:", event.toolCallId);
+                    setState((prev) => ({
+                      ...prev,
+                      steps: [...prev.steps, createErrorStep(`tool-result: no step found for toolCallId ${event.toolCallId}`)],
+                    }));
+                    break;
+                  }
+
+                  setState((prev) => ({
+                    ...prev,
+                    steps: prev.steps.map((s) =>
+                      s.id === stepId
+                        ? {
+                            ...s,
+                            status: "complete" as const,
+                            duration: Date.now() - s.timestamp.getTime(),
+                            toolOutput: event.result,
+                          }
+                        : s
+                    ),
+                  }));
+                  activeToolCalls.current.delete(event.toolCallId);
                   break;
                 }
 
@@ -231,8 +277,115 @@ export function useResearchAgent() {
                 case "error": {
                   throw new Error(event.error || "Stream error");
                 }
+
+                case "reasoning-start": {
+                  const reasoningId = event.id;
+                  if (!reasoningId) {
+                    console.error("[Stream] reasoning-start event missing id");
+                    setState((prev) => ({
+                      ...prev,
+                      steps: [...prev.steps, createErrorStep("reasoning-start event missing id")],
+                    }));
+                    break;
+                  }
+
+                  const stepId = generateId();
+                  activeReasoningBlocks.current.set(reasoningId, { stepId, fullText: "" });
+
+                  setState((prev) => ({
+                    ...prev,
+                    steps: [
+                      ...prev.steps,
+                      {
+                        id: stepId,
+                        type: "thinking" as const,
+                        title: "Thinking",
+                        description: "",
+                        status: "running" as const,
+                        timestamp: new Date(),
+                        stepNumber: currentStepNumber,
+                      },
+                    ],
+                  }));
+                  break;
+                }
+
+                case "reasoning-delta": {
+                  const reasoningId = event.id;
+                  const reasoningText = event.text || "";
+
+                  if (!reasoningId) {
+                    console.error("[Stream] reasoning-delta event missing id");
+                    setState((prev) => ({
+                      ...prev,
+                      steps: [...prev.steps, createErrorStep("reasoning-delta event missing id")],
+                    }));
+                    break;
+                  }
+                  if (!reasoningText) break;
+
+                  const block = activeReasoningBlocks.current.get(reasoningId);
+                  if (!block) {
+                    console.error("[Stream] reasoning-delta: no block found for id:", reasoningId);
+                    setState((prev) => ({
+                      ...prev,
+                      steps: [...prev.steps, createErrorStep(`reasoning-delta: no block found for id ${reasoningId}`)],
+                    }));
+                    break;
+                  }
+
+                  block.fullText += reasoningText;
+
+                  setState((prev) => ({
+                    ...prev,
+                    steps: prev.steps.map((s) =>
+                      s.id === block.stepId
+                        ? { ...s, description: block.fullText }
+                        : s
+                    ),
+                  }));
+                  break;
+                }
+
+                case "reasoning-end": {
+                  const reasoningId = event.id;
+
+                  if (!reasoningId) {
+                    console.error("[Stream] reasoning-end event missing id");
+                    setState((prev) => ({
+                      ...prev,
+                      steps: [...prev.steps, createErrorStep("reasoning-end event missing id")],
+                    }));
+                    break;
+                  }
+
+                  const block = activeReasoningBlocks.current.get(reasoningId);
+                  if (!block) {
+                    console.error("[Stream] reasoning-end: no block found for id:", reasoningId);
+                    setState((prev) => ({
+                      ...prev,
+                      steps: [...prev.steps, createErrorStep(`reasoning-end: no block found for id ${reasoningId}`)],
+                    }));
+                    break;
+                  }
+
+                  setState((prev) => ({
+                    ...prev,
+                    steps: prev.steps.map((s) =>
+                      s.id === block.stepId
+                        ? {
+                            ...s,
+                            status: "complete" as const,
+                            duration: Date.now() - s.timestamp.getTime(),
+                          }
+                        : s
+                    ),
+                  }));
+                  activeReasoningBlocks.current.delete(reasoningId);
+                  break;
+                }
               }
-            } catch (parseError) {
+            } catch {
               // If it's not JSON, it might be raw text or a parsing error
               // Only log actual parse errors, not intentional non-JSON lines
               if (eventData.startsWith("{")) {
@@ -303,11 +456,13 @@ export function useResearchAgent() {
               toolOutput: s.toolOutput,
               duration: s.duration,
               timestamp: s.timestamp,
+              stepNumber: s.stepNumber,
             })),
             status: finalState.phase,
             error: finalState.error,
             startedAt: startTimeRef.current?.toISOString(),
             completedAt: finalState.endTime?.toISOString(),
+            model: finalState.model,
           }),
         });
 
@@ -349,17 +504,15 @@ export function useResearchAgent() {
       setState({
         phase: research.status,
         question: research.question,
-        subQuestions: [],
         steps: research.steps.map((s: AgentStep) => ({
           ...s,
           timestamp: new Date(s.timestamp),
         })),
-        sources: [],
-        currentStepIndex: research.steps.length - 1,
         report: research.report,
         error: research.error || null,
         startTime: new Date(research.startedAt),
         endTime: research.completedAt ? new Date(research.completedAt) : null,
+        model: research.model || null,
       });
     } catch (error) {
       console.error("Failed to load research:", error);

@@ -73,6 +73,7 @@ export const ResearchStepSchema = z.object({
   toolOutput: z.unknown().optional(),
   duration: z.number().optional(),
   timestamp: z.date(),
+  stepNumber: z.number().optional(),
 });
 
 export type ResearchStep = z.infer<typeof ResearchStepSchema>;
@@ -87,6 +88,7 @@ export const ResearchHistorySchema = z.object({
   startedAt: z.date(),
   completedAt: z.date().nullable().optional(),
   duration: z.number().optional(), // in milliseconds
+  model: z.string().nullable().optional(),
 });
 
 export type ResearchHistory = z.infer<typeof ResearchHistorySchema>;
